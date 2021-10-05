@@ -11,23 +11,54 @@ using WAV
 
 #include("utils.jl")
 
+
+filename = "loc6.wav" 
+nsamples, _ = wavsize(filename)
+x = signal(filename; start = 1, nsamples = nsamples)
+y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
+yb = y.*cw(1000, length(mseq(12))*12/6000, 6000.0)
+#y = repeat(mseq(12); inner=12)
+d1 = sfiltfilt(bpf, x[:,1])
+d2 = sfiltfilt(bpf, x[:,2])
+d3 = sfiltfilt(bpf, x[:,3])
+display(specgram(d2;fs=32000,nfft=4096, noverlap=2048))
+bb = downconvert(sresample(d2, 9//8), 6, 6000)
+#plot(abs.(mfilter(y[1:3000],bb)))
+events = Int[]
+events=find_mseq(bb, y)
+
+T = length(y)
+for i ∈ events
+    rbb = bb[events[i]:events[i] + T + 100] 
+    #h = MMSE_eqlz(rbb, y, 10)
+    #println(i)
+    
+end
+
+
+
+
+
+
+
+
 # cd(dirname(Pkg.project().path))
 # filename = "loc4-1.wav" 
 # nsamples, _ = wavsize(filename)
 
 # stop = nsamples
 # start = 1
-# wavsize(filename) = wavread(filename; format="size")
+ wavsize(filename) = wavread(filename; format="size")
 
 # z = Float64[]
 # #fs = 0.0
-
-# const bpf = fir(256, 3800.0, 6200.0; fs=fs)
+fs = 32000
+bpf = fir(256, 3800.0, 6200.0; fs=fs)
 
 
 # x = signal(filename; start=1, nsamples=min(blksize, stop-1+1))
 # y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
-
+# y = repeat(mseq(12); inner=12)
 # bits = Int64[]
 # for i = 12:12:length(t)
 #     push!(bits,convert.(Int64,mean(t[i-11:i])))
@@ -68,22 +99,24 @@ function find_mseq(bb, tx)
     events
   end 
 
+  function MMSE_eqlz(s, MSEQ, M)
+    ϕff = xcorr(samples(s), samples(s))
+    ϕfd = xcorr(MSEQ, samples(s))
+    N = length(MSEQ)
+    𝑅ff = ϕff[N:N+M-1]
+    𝑅 = Toeplitz(𝑅ff, vec(𝑅ff))
+    P = ϕfd[N:N+M-1]
+    h = inv(collect(𝑅)) * (P)
+    h
+  end
 
-filename = "loc6.wav" 
-nsamples, _ = wavsize(filename)
-x = signal(filename; start = 1, nsamples = nsamples)
-d1 = sfiltfilt(bpf, x[:,1])
-d2 = sfiltfilt(bpf, x[:,2])
-d3 = sfiltfilt(bpf, x[:,3])
-#display(specgram(d2;fs=32000,nfft=4096, noverlap=2048))
-bb=downconvert(sresample(d2, 9//8), 6, 6000)
-#plot(abs.(mfilter(yb[1:3000],bb)))
-events = Int[]
-events=find_mseq(bb, yb)
-T = length(yb)
-for i ∈ events
-    rbb = bb[events[i]:events[i] + T] 
-end
+
+
+
+
+
+
+
 
 # channel 2 is the best, loc 4-2 can see, loc5-1 loc5-2, loc6
 

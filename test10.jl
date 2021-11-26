@@ -159,7 +159,7 @@ for h = 1:length(SD2)
     push!(downbb,bit)
     temp1 = sign.(tx_zm[h:-1:(h-12+1)])
     n=count(>=(0.0), temp1)
-    println(n)
+    #println(n)
     if (n >= 6)
       bit = 1
     else 

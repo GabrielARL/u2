@@ -6,6 +6,7 @@ using DSP
 const audacityExe = "/Applications/Audacity.app/Contents/MacOS/Audacity"
 fs = 32000
 bpf = fir(256, 3800.0, 6200.0; fs=fs)
+bpf1 = fir(256, 4800.0, 5200.0; fs=fs)
 
 function computeBER(downbb, downtxbb)
   bits = Int64[]
@@ -67,8 +68,12 @@ end
 function prepsig(x)
     d1 = sfiltfilt(bpf, x)
     bb=downconvert(sresample(d1, 9//8), 6, 6000)
-    bb = bb .* cw(1000.0, length(bb)/6000, 6000.0)
-    bb 
+    bbc = bb .* cw(1000.0, length(bb)/6000, 6000.0)
+
+    d1 = sfiltfilt(bpf1, x)
+    bb=downconvert(sresample(d1, 9//8), 6, 6000)
+    bbc2 = bb .* cw(1000.0, length(bb)/6000, 6000.0)
+    bbc, bbc2
 end
 
 
@@ -88,7 +93,7 @@ wavsize(filename) = wavread(filename; format="size")
 function find_mseq(bb, tx)
   λ = 0.9999          # exponential averaging factor for threshold
   β = 5.0             # threshold is β × average
-  xmin = 0.10       # minimum threshold
+  xmin = 0.7       # minimum threshold
   gap = 3500         # minimum gap between detections
   pwidth = 25        # peak width (to look for maxima)
   x = abs.(mfilter(tx[1:3000], bb))
@@ -103,14 +108,15 @@ function find_mseq(bb, tx)
       j = i + gap
     end
   end
-
+  plot(x)
   println(events)
 
   invalid = ones(Bool, size(events))
   for i = 2:length(events)
     dt = (events[i] - events[i-1]) / fs
-    n = dt/19                                       # 19s gap between LFMs in a group
-    if n > 1.0 && n < 2.0 && isapprox(n, round(n); atol=0.2)  # valid -> gap is right
+    n = dt/19  
+    println(n)                                     # 19s gap between LFMs in a group
+    if n > 1.0 && n < 3.0 && isapprox(n, round(n); atol=0.4)  # valid -> gap is right
       invalid[i] = false
       invalid[i-1] = false
     end

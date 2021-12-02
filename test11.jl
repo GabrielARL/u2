@@ -70,9 +70,10 @@ aaa = Float64[]
 bbb = Int64[]
 ccc = Int64[]
 
-for i = 2:length(events)
-    for j = 0:5:20 
+for i = 1:length(events)
+    for j = -10:1:10 
         e2 = Float64[]
+        bbb = resample(bbc, 990+j/1000)
         temp = process(bbc, events[i]+j)
         println(length(temp))
         if(isassigned(temp))

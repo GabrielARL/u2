@@ -2,7 +2,7 @@ moving_average(vs,n) = [sum(@view vs[i:(i+n-1)])/n for i in 1:(length(vs)-(n-1))
 
 using ToeplitzMatrices
 
-function makevb(rbb) 
+function makevb(rbb,d) 
 y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
 yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)  
 rbb = resample(rbb,1000/999)

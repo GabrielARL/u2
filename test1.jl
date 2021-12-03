@@ -54,7 +54,7 @@ function find_mseq(bb, tx)
 y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
 yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
 
-filename = "loc4-2.wav" 
+filename = "loc5-1.wav" 
 nsamples, _ = wavsize(filename)
 x = signal(filename; start = 1, nsamples = nsamples)
 #idx = findall(x-> abs(x) > 0.02, x[:,2])
@@ -62,7 +62,9 @@ x = signal(filename; start = 1, nsamples = nsamples)
 d1 = sfiltfilt(bpf, x[:,1])
 d2 = sfiltfilt(bpf, x[:,2])
 d3 = sfiltfilt(bpf, x[:,3])
-#display(specgram(d2;fs=32000,nfft=4096, noverlap=2048))
+display(specgram(d1;fs=32000,nfft=4096, noverlap=2048))
+display(specgram(d2;fs=32000,nfft=4096, noverlap=2048))
+display(specgram(d3;fs=32000,nfft=4096, noverlap=2048))
 bb=downconvert(sresample(d2, 9//8), 6, 6000)
 bb = bb .* cw(1000.0, length(bb)/6000, 6000.0)
 

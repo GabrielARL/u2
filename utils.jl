@@ -54,14 +54,14 @@ end
 
 function compDoppler(vn1, yb)
     a = Float64[]
-    for j = 1:1:200
-      vn2 = resample(vn1, (j+900)/1000)
+    for j = 1:1:100
+      vn2 = resample(vn1, (j+950)/1000)
       cr=mfilter(yb, vn2)
       max = maximum(abs.(cr))
       push!(a, max)
     end
   fac=findmax(a)[2]
-  vn_best = resample(vn1, (fac+900)/1000)
+  vn_best = resample(vn1, (fac+950)/1000)
   vn_best
 end
 
@@ -90,13 +90,13 @@ end
 
 wavsize(filename) = wavread(filename; format="size")
 
-function find_mseq(bb, tx)
+function find_mseq(bb, tx, th, blk)
   λ = 0.9999          # exponential averaging factor for threshold
   β = 5.0             # threshold is β × average
-  xmin = 0.7       # minimum threshold
+  xmin = th       # minimum threshold
   gap = 3500         # minimum gap between detections
   pwidth = 25        # peak width (to look for maxima)
-  x = abs.(mfilter(tx[1:3000], bb))
+  x = abs.(mfilter(tx[1:blk], bb))
   μ = x[1]
   j = 0
   events = Int[]
@@ -108,7 +108,7 @@ function find_mseq(bb, tx)
       j = i + gap
     end
   end
-  plot(x)
+  #plot(x)
   println(events)
 
   invalid = ones(Bool, size(events))
@@ -122,6 +122,8 @@ function find_mseq(bb, tx)
     end
   end
   println(invalid)
-  deleteat!(events, findall(invalid))
+  if(length(invalid)!=1)
+    deleteat!(events, findall(invalid))
+  end
   events
 end 

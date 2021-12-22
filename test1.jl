@@ -54,7 +54,7 @@ function find_mseq(bb, tx)
 y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
 yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
 
-filename = "loc5-1.wav" 
+filename = "loc6.wav" 
 nsamples, _ = wavsize(filename)
 x = signal(filename; start = 1, nsamples = nsamples)
 #idx = findall(x-> abs(x) > 0.02, x[:,2])

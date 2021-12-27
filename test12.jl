@@ -1,5 +1,10 @@
-using SignalAnalysis: length
 using SignalAnalysis
+
+include("FEC.jl")
+include("BCH.jl")
+
+import Main.FEC
+import Main.BCH
 
 tx=convert.(Int64, mseq(12))
 
@@ -9,8 +14,13 @@ for i = 1:length(tx)
     end
 end
 
-testdata = zeros(Int64,1, 1024)
-testdata1 = Main.FEC.encode(Code(63, 16, 11, 0o6331141367235453), testdata)
+data = BitVector(rand(Bool, 1040))
+EncData=FEC.encode(BCH.Code(63, 16, 11, 0o6331141367235453), data)
+sc = xor.(EncData, tx)
+EncDataR = xor.(tx, sc)
+dataR,_=FEC.decode(BCH.Code(63, 16, 11, 0o6331141367235453), EncDataR)
+
+println(sum(data .-dataR))
 
 
 

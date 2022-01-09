@@ -1,4 +1,4 @@
-using Revise: push!
+using Revise: push!, convert, copy
 using ToeplitzMatrices: include
 using LinearAlgebra: length
 using Base: length_continued
@@ -23,8 +23,12 @@ filename = "loc5-1.wav"
 nsamples, _ = wavsize(filename)
 x = signal(filename; start = 1, nsamples = nsamples)
 bbc, bb2 = prepsig(x[:,2])
-#events = Int[]
-#events = find_mseq(bbc, (yb), 0.7, 2000) #0.7, 3000 for 4-2 #0.5, 3000 for 5-1 # 0.7, 2000 for 5-2 # 0.7,2000
-#e_all = Float64[]
 
-ber, downbb, downtxbb = process(bbc, events[1], 1, 4);
+# events = Int[]
+# events = find_mseq(bbc, (yb), 0.7, 2000) #0.7, 3000 for 4-2 #0.5, 3000 for 5-1 # 0.7, 2000 for 5-2 # 0.7,2000
+# e_all = Float64[]
+
+
+snr1,snr2,snr3 = process3(x, events[2], 1, 4)
+
+#uber, cber = process(bbc, events[1], 1, 4);

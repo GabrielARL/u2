@@ -17,10 +17,20 @@ end
 data = BitVector(rand(Bool, 1040))
 EncData=FEC.encode(BCH.Code(63, 16, 11, 0o6331141367235453), data)
 sc = xor.(EncData, tx)
-EncDataR = xor.(tx, sc)
-dataR,_=FEC.decode(BCH.Code(63, 16, 11, 0o6331141367235453), EncDataR)
 
-println(sum(data .-dataR))
+rx = tx
+for i = 1:5:1040
+    if(tx[i] == 1)
+    rx[i] = 0
+    else
+    rx[i] = 1
+    end    
+end
+
+EncDataR = xor.(rx, sc)
+dataR,_=FEC.decode(BCH.Code(63, 16, 11, 0o6331141367235453), EncDataR)
+println(sum(abs.(EncData .-EncDataR)) /4095)
+println(sum(abs.(data .-dataR)) / 1040)
 
 
 

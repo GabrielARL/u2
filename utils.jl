@@ -224,6 +224,57 @@ function process(bbc, events, d, Q)
   uber, cber
 end
 
+
+function compDoppler_equalize(vn1, blksize, eqlzBlkSize, yb, Q, λ)
+  vn_best_all = ComplexF64[]
+  SD_all = ComplexF64[]
+
+  for i = 1:blksize:length(vn1)-blksize-1
+    vn_best = compDoppler(vn1[i:i+blksize-1], yb[i:i+blksize-1])
+    if(length(vn_best) > blksize)
+        vn_best = vn_best[1:blksize]
+    end
+    if(length(vn_best) < blksize)
+        vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
+    end
+
+    for h = 1:length(vn_best)
+        push!(vn_best_all, vn_best[h])
+    end
+  end  
+
+
+  for i = 1:eqlzBlkSize:length(vn_best_all)-eqlzBlkSize-1
+      quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
+      Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
+      quantizer_op, SD2 = DA(vn_best_all[i:i+eqlzBlkSize], ff_filt, 1)
+      #println((length(SD2), eqlzBlkSize))
+      for h = 1:(eqlzBlkSize)
+          if(h <= length(SD2))
+            push!(SD_all, SD2[h])
+          else
+            push!(SD_all, zero(ComplexF64))
+          end
+      end
+      println(length(SD_all))
+  end
+SD_all
+end
+
+function dSample_comp_err(SD_all, yb)
+  atx=angle.(samples(yb))
+  tx_m = mean(atx)
+  aSD = abs.(angle.(SD_all))
+  tx_zm = atx .- tx_m
+  aSD_zm = aSD .- tx_m
+  #println(length(aSD_zm))
+  downbb, downtxbb = downsymboling(aSD_zm, tx_zm)
+  uber = computeBER(downbb, downtxbb)
+  OSNR=10*log10(1/(sum((abs.((yb[1:length(SD_all)] .- (-SD_all) ))).^2)/length(SD_all)))
+  uber, downbb, downtxbb, OSNR
+end
+
+
 function process3(x, events, d, Q)
   y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
   yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
@@ -237,17 +288,15 @@ function process3(x, events, d, Q)
   rbb2 = bb2[events:events+T]
   rbb3 = bb3[events:events+T]
 
-  nbb1 = bb1[events+T:events+(2*T)]  
-  nbb2 = bb2[events+T:events+(2*T)]
-  nbb3 = bb3[events+T:events+(2*T)]
+  nbb1 = bb1[events+T:min(events+(2*T),length(bb1)-1)]  
+  nbb2 = bb2[events+T:min(events+(2*T),length(bb1)-1)]
+  nbb3 = bb3[events+T:min(events+(2*T),length(bb1)-1)]
 
   snr1 = norm(rbb1,2) / ( norm(nbb1, 2))
   snr2 = norm(rbb2,2) / ( norm(nbb2, 2))
   snr3 = norm(rbb3,2) / ( norm(nbb3, 2))
 
   println((snr1,snr2,snr3))
-
-
 
   vn1 = makevb(rbb1, d)
   vn2 = makevb(rbb2, d)
@@ -262,145 +311,121 @@ function process3(x, events, d, Q)
   push!(e2 , 0.0)
   #length(vn1)
   λ = 0.9995 
-  vn_best_all1 = ComplexF64[]
-  vn_best_all2 = ComplexF64[]
-  vn_best_all3 = ComplexF64[]
 
   SD_all1 = ComplexF64[]
   SD_all2 = ComplexF64[]
   SD_all3 = ComplexF64[]
 
   data = BitVector(rand(Bool, 792))
+  SD_all1 = compDoppler_equalize(vn1, blksize, eqlzBlkSize, yb, Q, λ)
+  SD_all2 = compDoppler_equalize(vn2, blksize, eqlzBlkSize, yb, Q, λ)
+  SD_all3 = compDoppler_equalize(vn3, blksize, eqlzBlkSize, yb, Q, λ)
 
-
-  for i = 1:blksize:length(vn1)-blksize-1
-      vn_best = compDoppler(vn1[i:i+blksize-1], yb[i:i+blksize-1])
-      if(length(vn_best) > blksize)
-          vn_best = vn_best[1:blksize]
-      end
-      if(length(vn_best) < blksize)
-          vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
-      end
-
-      for h = 1:length(vn_best)
-          push!(vn_best_all1, vn_best[h])
-      end
-  end
-
-  for i = 1:blksize:length(vn2)-blksize-1
-    vn_best = compDoppler(vn2[i:i+blksize-1], yb[i:i+blksize-1])
-    if(length(vn_best) > blksize)
-        vn_best = vn_best[1:blksize]
-    end
-    if(length(vn_best) < blksize)
-        vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
-    end
-
-    for h = 1:length(vn_best)
-        push!(vn_best_all2, vn_best[h])
-    end
-  end
-
-  for i = 1:blksize:length(vn3)-blksize-1
-    vn_best = compDoppler(vn3[i:i+blksize-1], yb[i:i+blksize-1])
-    if(length(vn_best) > blksize)
-        vn_best = vn_best[1:blksize]
-    end
-    if(length(vn_best) < blksize)
-        vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
-    end
-
-    for h = 1:length(vn_best)
-        push!(vn_best_all3, vn_best[h])
-    end
-  end
-
-
-  for i = 1:eqlzBlkSize:length(vn_best_all1)-eqlzBlkSize-1
-      quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all1[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
-      Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
-      quantizer_op, SD2 = DA(vn_best_all1[i:i+eqlzBlkSize], ff_filt, 1)
-      println((length(SD2), eqlzBlkSize))
-      for h = 1:(eqlzBlkSize)
-        if(h <= length(SD2))
-          push!(SD_all1, SD2[h])
-        else
-          push!(SD_all1, zero(ComplexF64))
-        end
-      end
-  end
-
-  for i = 1:eqlzBlkSize:length(vn_best_all2)-eqlzBlkSize-1
-    quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all2[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
-    Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
-    quantizer_op, SD2 = DA(vn_best_all2[i:i+eqlzBlkSize], ff_filt, 1)
-    println((length(SD2), eqlzBlkSize))
-    for h = 1:(eqlzBlkSize)
-      if(h <= length(SD2))
-        push!(SD_all2, SD2[h])
-      else
-        push!(SD_all2, zero(ComplexF64))
-      end
-    end
-  end
-
-  for i = 1:eqlzBlkSize:length(vn_best_all3)-eqlzBlkSize-1
-    quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all3[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
-    Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
-    quantizer_op, SD2 = DA(vn_best_all3[i:i+eqlzBlkSize], ff_filt, 1)
-    println((length(SD2), eqlzBlkSize))
-    for h = 1:(eqlzBlkSize)
-      if(h <= length(SD2))
-        push!(SD_all3, SD2[h])
-      else
-        push!(SD_all3, zero(ComplexF64))
-      end
-    end
-  end
-
-
-
-  # atx=angle.(samples(yb))
-  # tx_m = mean(atx)
+  uber1, downbb1, downtxbb, OSNR1 = dSample_comp_err(SD_all1, yb)
+  uber2, downbb2, downtxbb, OSNR2 = dSample_comp_err(SD_all2, yb)
+  uber3, downbb3, downtxbb, OSNR3 = dSample_comp_err(SD_all3, yb)
+  
+  # SD_all=(SD_all1 + SD_all2 + SD_all3)/3
   # aSD = abs.(angle.(SD_all))
-  # tx_zm = atx .- tx_m
-  # aSD_zm = aSD .- tx_m
-  # #println(length(aSD_zm))
+  # aSD_zm = aSD .- tx_m 
   # downbb, downtxbb = downsymboling(aSD_zm, tx_zm)
-  # uber = computeBER(downbb, downtxbb)
-   
+  # uber_all = computeBER(downbb, downtxbb)
+  # println((uber1,uber2,uber3))
+  # println((uber_all))
 
-  # downbb = [downbb; ones(ComplexF64,length(mseq(12))-length(downbb))]
-  # downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
+
 
   
-  # for i = 1:length(downbb)
-  #   if(downbb[i] == -1)
-  #     downbb[i] = 0
-  #   end
-  # end
-  # for i = 1:length(downtxbb)
-  #   if(downtxbb[i] == -1)
-  #     downtxbb[i] = 0
-  #   end
-  # end
-  # downbb = convert.(Bool, downbb)
-  # downtxbb = convert.(Bool, downtxbb)
+  downbb1 = [downbb1; ones(ComplexF64,length(mseq(12))-length(downbb))]
+  downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
+  
 
-  # EncData=FEC.encode(BCH.BCH_31_6, data)
-  # sc = xor.(EncData, downtxbb[1:length(EncData)])
 
-  # EncDataR = xor.(sc, downbb[1:length(EncData)])
-  # EncDataR1 = ones(Int64,1,length(EncDataR))
-  # for i = 1:length(EncDataR)
-  #   if(EncDataR[i] == 0)
-  #     EncDataR1[i] = -1
-  #   end
-  # end
 
-  # dataR , _ = FEC.decode(BCH.BCH_31_6, EncDataR1)
-  # #println((length(aSD_zm),length(tx_zm),length(vn_best_all),ber))
-  # cber = sum(abs.(data .- dataR))/length(data)
-  # uber, cber
-  snr1,snr2,snr3
+
+  for i = 1:length(downbb)
+    if(downbb[i] == -1)
+      downbb[i] = 0
+    end
+  end
+  for i = 1:length(downtxbb)
+    if(downtxbb[i] == -1)
+      downtxbb[i] = 0
+    end
+  end
+
+
+
+  downbb = convert.(Bool, downbb)
+  downtxbb = convert.(Bool, downtxbb)
+
+  EncData=FEC.encode(BCH.BCH_31_6, data)
+  sc = xor.(EncData, downtxbb[1:length(EncData)])
+
+  EncDataR = xor.(sc, downbb[1:length(EncData)])
+  EncDataR1 = ones(Int64,1,length(EncDataR))
+  for i = 1:length(EncDataR)
+    if(EncDataR[i] == 0)
+      EncDataR1[i] = -1
+    end
+  end
+
+  dataR , _ = FEC.decode(BCH.BCH_31_6, EncDataR1)
+  #println((length(aSD_zm),length(tx_zm),length(vn_best_all),ber))
+  cber = sum(abs.(data .- dataR))/length(data)
+
+  downbb1 = [downbb1; ones(ComplexF64,length(mseq(12))-length(downbb1))]
+  downbb2 = [downbb2; ones(ComplexF64,length(mseq(12))-length(downbb2))]
+  downbb3 = [downbb3; ones(ComplexF64,length(mseq(12))-length(downbb3))]
+
+  for i = 1:length(downbb1)
+    if(downbb1[i] == -1)
+      downbb1[i] = 0
+    end
+    if(downbb2[i] == -1)
+      downbb2[i] = 0
+    end
+    if(downbb3[i] == -1)
+      downbb3[i] = 0
+    end
+  end
+
+  downbb1 = convert.(Bool, downbb1)
+  downbb2 = convert.(Bool, downbb2)
+  downbb3 = convert.(Bool, downbb3)
+
+
+  EncData=FEC.encode(BCH.BCH_31_6, data)
+  sc = xor.(EncData, downtxbb[1:length(EncData)])
+  EncDataR1 = xor.(sc, downbb1[1:length(EncData)])
+  EncDataR2 = xor.(sc, downbb2[1:length(EncData)])
+  EncDataR3 = xor.(sc, downbb3[1:length(EncData)])
+
+
+
+  EncDataR11 = ones(Int64,1,length(EncDataR))
+  EncDataR12 = ones(Int64,1,length(EncDataR))
+  EncDataR13 = ones(Int64,1,length(EncDataR))
+  for i = 1:length(EncDataR1)
+    if(EncDataR1[i] == 0)
+      EncDataR11[i] = -1
+    end
+    if(EncDataR2[i] == 0)
+      EncDataR12[i] = -1
+    end
+    if(EncDataR3[i] == 0)
+      EncDataR13[i] = -1
+    end
+  end
+
+  dataR1 , _ = FEC.decode(BCH.BCH_31_6, EncDataR11)
+  dataR2 , _ = FEC.decode(BCH.BCH_31_6, EncDataR12)
+  dataR3 , _ = FEC.decode(BCH.BCH_31_6, EncDataR13)
+
+  cber1 = sum(abs.(data .- dataR1))/length(data)
+  cber2 = sum(abs.(data .- dataR2))/length(data)
+  cber3 = sum(abs.(data .- dataR3))/length(data)
+  println((cber1, cber2, cber3))
+  uber_all, cber, cber1, cber2, cber3
+  #snr1,snr2,snr3
 end

@@ -6,7 +6,7 @@ using DSP
 const audacityExe = "/Applications/Audacity.app/Contents/MacOS/Audacity"
 fs = 32000
 bpf = fir(256, 3800.0, 6200.0; fs=fs)
-bpf1 = fir(256, 4800.0, 5200.0; fs=fs)
+bpf1 = fir(256, 4900.0, 5100.0; fs=fs)
 
 function computeBER(downbb, downtxbb)
   bits = Int64[]
@@ -168,17 +168,16 @@ function process(bbc, events, d, Q)
       quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
       Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
       quantizer_op, SD2 = DA(vn_best_all[i:i+eqlzBlkSize], ff_filt, 1)
-      println((length(SD2), eqlzBlkSize))
+      #println((length(SD2), eqlzBlkSize))
       for h = 1:(eqlzBlkSize)
         if(h <= length(SD2))
           push!(SD_all, SD2[h])
+          #println(SD2[h])
         else
           push!(SD_all, zero(ComplexF64))
         end
       end
   end
-
-
 
   atx=angle.(samples(yb))
   tx_m = mean(atx)
@@ -190,10 +189,9 @@ function process(bbc, events, d, Q)
   uber = computeBER(downbb, downtxbb)
    
 
-  downbb = [downbb; ones(ComplexF64,length(mseq(12))-length(downbb))]
-  downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
+   downbb = [downbb; ones(ComplexF64,length(mseq(12))-length(downbb))]
+   downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
 
-  
   for i = 1:length(downbb)
     if(downbb[i] == -1)
       downbb[i] = 0
@@ -217,13 +215,10 @@ function process(bbc, events, d, Q)
       EncDataR1[i] = -1
     end
   end
-
   dataR , _ = FEC.decode(BCH.BCH_31_6, EncDataR1)
-  #println((length(aSD_zm),length(tx_zm),length(vn_best_all),ber))
   cber = sum(abs.(data .- dataR))/length(data)
   uber, cber
 end
-
 
 function compDoppler_equalize(vn1, blksize, eqlzBlkSize, yb, Q, λ)
   vn_best_all = ComplexF64[]
@@ -256,7 +251,7 @@ function compDoppler_equalize(vn1, blksize, eqlzBlkSize, yb, Q, λ)
             push!(SD_all, zero(ComplexF64))
           end
       end
-      println(length(SD_all))
+      #println(length(SD_all))
   end
 SD_all
 end
@@ -273,6 +268,32 @@ function dSample_comp_err(SD_all, yb)
   OSNR=10*log10(1/(sum((abs.((yb[1:length(SD_all)] .- (-SD_all) ))).^2)/length(SD_all)))
   uber, downbb, downtxbb, OSNR
 end
+
+function switchBool(a)
+  if(a == -1)
+    b = 0
+  else
+    b = 1
+  end
+  convert(Bool, b)
+  b
+end
+
+function perform_post_decoding(data, downbb,downtxbb)
+    EncData=FEC.encode(BCH.BCH_31_6, data)
+    sc = xor.(EncData, downtxbb[1:length(EncData)])
+
+    EncDataR1 = xor.(sc, downbb[1:length(EncData)])
+    EncDataR_buffer = ones(Int64,1,length(EncDataR1))
+    for i = 1:length(EncDataR1)
+        if(EncDataR1[i] == 0)
+        EncDataR_buffer[i] = -1
+        end
+    end
+  dataR , _ = FEC.decode(BCH.BCH_31_6, EncDataR_buffer)
+  dataR
+end
+
 
 
 function process3(x, events, d, Q)
@@ -305,9 +326,6 @@ function process3(x, events, d, Q)
   blksize = 1092
   eqlzBlkSize = (12 * 64)
   e2 = Float64[]
-  vn_best = zeros(ComplexF64,1,blksize)
-  aSD_zm = zeros(ComplexF64,1,blksize)
-  tx_zm = zeros(ComplexF64,1,blksize)
   push!(e2 , 0.0)
   #length(vn1)
   λ = 0.9995 
@@ -325,107 +343,30 @@ function process3(x, events, d, Q)
   uber2, downbb2, downtxbb, OSNR2 = dSample_comp_err(SD_all2, yb)
   uber3, downbb3, downtxbb, OSNR3 = dSample_comp_err(SD_all3, yb)
   
-  # SD_all=(SD_all1 + SD_all2 + SD_all3)/3
-  # aSD = abs.(angle.(SD_all))
-  # aSD_zm = aSD .- tx_m 
-  # downbb, downtxbb = downsymboling(aSD_zm, tx_zm)
-  # uber_all = computeBER(downbb, downtxbb)
-  # println((uber1,uber2,uber3))
-  # println((uber_all))
-
-
-
-  
-  downbb1 = [downbb1; ones(ComplexF64,length(mseq(12))-length(downbb))]
-  downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
-  
-
-
-
-
-  for i = 1:length(downbb)
-    if(downbb[i] == -1)
-      downbb[i] = 0
-    end
-  end
-  for i = 1:length(downtxbb)
-    if(downtxbb[i] == -1)
-      downtxbb[i] = 0
-    end
-  end
-
-
-
-  downbb = convert.(Bool, downbb)
-  downtxbb = convert.(Bool, downtxbb)
-
-  EncData=FEC.encode(BCH.BCH_31_6, data)
-  sc = xor.(EncData, downtxbb[1:length(EncData)])
-
-  EncDataR = xor.(sc, downbb[1:length(EncData)])
-  EncDataR1 = ones(Int64,1,length(EncDataR))
-  for i = 1:length(EncDataR)
-    if(EncDataR[i] == 0)
-      EncDataR1[i] = -1
-    end
-  end
-
-  dataR , _ = FEC.decode(BCH.BCH_31_6, EncDataR1)
-  #println((length(aSD_zm),length(tx_zm),length(vn_best_all),ber))
-  cber = sum(abs.(data .- dataR))/length(data)
+  OSNRT = OSNR1 + OSNR2 + OSNR3
+  SD_all_c = ((SD_all1 * OSNR1) + (SD_all2*OSNR2) + (SD_all3*OSNR3))/  OSNRT
+  uber4, downbb4, downtxbb, OSNR4 = dSample_comp_err(SD_all_c, yb)
 
   downbb1 = [downbb1; ones(ComplexF64,length(mseq(12))-length(downbb1))]
   downbb2 = [downbb2; ones(ComplexF64,length(mseq(12))-length(downbb2))]
   downbb3 = [downbb3; ones(ComplexF64,length(mseq(12))-length(downbb3))]
+  downbb4 = [downbb4; ones(ComplexF64,length(mseq(12))-length(downbb4))]
+  downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
+  
+   downbb1=switchBool.(downbb1)
+   downbb2=switchBool.(downbb2)
+   downbb3=switchBool.(downbb3)
+   downbb4=switchBool.(downbb4)
+   downtxbb = switchBool.(downtxbb)
 
-  for i = 1:length(downbb1)
-    if(downbb1[i] == -1)
-      downbb1[i] = 0
-    end
-    if(downbb2[i] == -1)
-      downbb2[i] = 0
-    end
-    if(downbb3[i] == -1)
-      downbb3[i] = 0
-    end
-  end
-
-  downbb1 = convert.(Bool, downbb1)
-  downbb2 = convert.(Bool, downbb2)
-  downbb3 = convert.(Bool, downbb3)
-
-
-  EncData=FEC.encode(BCH.BCH_31_6, data)
-  sc = xor.(EncData, downtxbb[1:length(EncData)])
-  EncDataR1 = xor.(sc, downbb1[1:length(EncData)])
-  EncDataR2 = xor.(sc, downbb2[1:length(EncData)])
-  EncDataR3 = xor.(sc, downbb3[1:length(EncData)])
-
-
-
-  EncDataR11 = ones(Int64,1,length(EncDataR))
-  EncDataR12 = ones(Int64,1,length(EncDataR))
-  EncDataR13 = ones(Int64,1,length(EncDataR))
-  for i = 1:length(EncDataR1)
-    if(EncDataR1[i] == 0)
-      EncDataR11[i] = -1
-    end
-    if(EncDataR2[i] == 0)
-      EncDataR12[i] = -1
-    end
-    if(EncDataR3[i] == 0)
-      EncDataR13[i] = -1
-    end
-  end
-
-  dataR1 , _ = FEC.decode(BCH.BCH_31_6, EncDataR11)
-  dataR2 , _ = FEC.decode(BCH.BCH_31_6, EncDataR12)
-  dataR3 , _ = FEC.decode(BCH.BCH_31_6, EncDataR13)
+   dataR1 = perform_post_decoding(data, downbb1, downtxbb) 
+   dataR2 = perform_post_decoding(data, downbb2, downtxbb)
+   dataR3 = perform_post_decoding(data, downbb3, downtxbb)
+   dataR4 = perform_post_decoding(data, downbb4, downtxbb)
 
   cber1 = sum(abs.(data .- dataR1))/length(data)
-  cber2 = sum(abs.(data .- dataR2))/length(data)
+  cber2 = sum(abs.(data .- dataR2))/length(data) 
   cber3 = sum(abs.(data .- dataR3))/length(data)
-  println((cber1, cber2, cber3))
-  uber_all, cber, cber1, cber2, cber3
-  #snr1,snr2,snr3
+  cber4 = sum(abs.(data .- dataR4))/length(data)
+  cber1, cber2, cber3, cber4
 end

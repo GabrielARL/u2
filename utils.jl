@@ -6,7 +6,7 @@ using DSP
 const audacityExe = "/Applications/Audacity.app/Contents/MacOS/Audacity"
 fs = 32000
 bpf = fir(256, 3800.0, 6200.0; fs=fs)
-bpf1 = fir(256, 4900.0, 5100.0; fs=fs)
+bpf1 = fir(256, 4500.0, 5500.0; fs=fs)
 
 function computeBER(downbb, downtxbb)
   bits = Int64[]
@@ -20,7 +20,6 @@ function downsymboling(aSD_zm, tx_zm)
   atxDs = Float64[]
   downbb = Int64[]
   downtxbb = Int64[]
-
 
   for h = 1:length(aSD_zm)
     push!(SDs, aSD_zm[h])
@@ -46,9 +45,7 @@ function downsymboling(aSD_zm, tx_zm)
     end
     
   end
-
   downbb, downtxbb
-
 end
 
 
@@ -127,134 +124,6 @@ function find_mseq(bb, tx, th, blk)
   end
   events
 end 
-
-function process(bbc, events, d, Q)
-  y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
-  yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
-  T = length(yb)
-  rbb = bbc[events:events+T]
-  vn = makevb(rbb, d) 
-  vn1 = vn #resample(vn[1:min(length(yb), length(vn))],(1000)/1000)
-  blksize = 1092
-  eqlzBlkSize = (12 * 64)
-  e2 = Float64[]
-  vn_best = zeros(ComplexF64,1,blksize)
-  aSD_zm = zeros(ComplexF64,1,blksize)
-  tx_zm = zeros(ComplexF64,1,blksize)
-  push!(e2 , 0.0)
-  #length(vn1)
-  λ = 0.9995 
-  vn_best_all = ComplexF64[]
-  SD_all = ComplexF64[]
-
-  data = BitVector(rand(Bool, 792))
-
-
-  for i = 1:blksize:length(vn1)-blksize-1
-      vn_best = compDoppler(vn1[i:i+blksize-1], yb[i:i+blksize-1])
-      if(length(vn_best) > blksize)
-          vn_best = vn_best[1:blksize]
-      end
-      if(length(vn_best) < blksize)
-          vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
-      end
-
-      for h = 1:length(vn_best)
-          push!(vn_best_all, vn_best[h])
-      end
-  end
-
-  for i = 1:eqlzBlkSize:length(vn_best_all)-eqlzBlkSize-1
-      quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
-      Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
-      quantizer_op, SD2 = DA(vn_best_all[i:i+eqlzBlkSize], ff_filt, 1)
-      #println((length(SD2), eqlzBlkSize))
-      for h = 1:(eqlzBlkSize)
-        if(h <= length(SD2))
-          push!(SD_all, SD2[h])
-          #println(SD2[h])
-        else
-          push!(SD_all, zero(ComplexF64))
-        end
-      end
-  end
-
-  atx=angle.(samples(yb))
-  tx_m = mean(atx)
-  aSD = abs.(angle.(SD_all))
-  tx_zm = atx .- tx_m
-  aSD_zm = aSD .- tx_m
-  #println(length(aSD_zm))
-  downbb, downtxbb = downsymboling(aSD_zm, tx_zm)
-  uber = computeBER(downbb, downtxbb)
-   
-
-   downbb = [downbb; ones(ComplexF64,length(mseq(12))-length(downbb))]
-   downtxbb = [downtxbb; ones(ComplexF64,length(mseq(12))-length(downtxbb))]
-
-  for i = 1:length(downbb)
-    if(downbb[i] == -1)
-      downbb[i] = 0
-    end
-  end
-  for i = 1:length(downtxbb)
-    if(downtxbb[i] == -1)
-      downtxbb[i] = 0
-    end
-  end
-  downbb = convert.(Bool, downbb)
-  downtxbb = convert.(Bool, downtxbb)
-
-  EncData=FEC.encode(BCH.BCH_31_6, data)
-  sc = xor.(EncData, downtxbb[1:length(EncData)])
-
-  EncDataR = xor.(sc, downbb[1:length(EncData)])
-  EncDataR1 = ones(Int64,1,length(EncDataR))
-  for i = 1:length(EncDataR)
-    if(EncDataR[i] == 0)
-      EncDataR1[i] = -1
-    end
-  end
-  dataR , _ = FEC.decode(BCH.BCH_31_6, EncDataR1)
-  cber = sum(abs.(data .- dataR))/length(data)
-  uber, cber
-end
-
-function compDoppler_equalize(vn1, blksize, eqlzBlkSize, yb, Q, λ)
-  vn_best_all = ComplexF64[]
-  SD_all = ComplexF64[]
-
-  for i = 1:blksize:length(vn1)-blksize-1
-    vn_best = compDoppler(vn1[i:i+blksize-1], yb[i:i+blksize-1])
-    if(length(vn_best) > blksize)
-        vn_best = vn_best[1:blksize]
-    end
-    if(length(vn_best) < blksize)
-        vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
-    end
-
-    for h = 1:length(vn_best)
-        push!(vn_best_all, vn_best[h])
-    end
-  end  
-
-
-  for i = 1:eqlzBlkSize:length(vn_best_all)-eqlzBlkSize-1
-      quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
-      Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
-      quantizer_op, SD2 = DA(vn_best_all[i:i+eqlzBlkSize], ff_filt, 1)
-      #println((length(SD2), eqlzBlkSize))
-      for h = 1:(eqlzBlkSize)
-          if(h <= length(SD2))
-            push!(SD_all, SD2[h])
-          else
-            push!(SD_all, zero(ComplexF64))
-          end
-      end
-      #println(length(SD_all))
-  end
-SD_all
-end
 
 function dSample_comp_err(SD_all, yb)
   atx=angle.(samples(yb))

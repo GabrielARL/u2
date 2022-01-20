@@ -15,7 +15,7 @@ function computeBER(downbb, downtxbb)
   ber2
 end
 
-function downsymboling(aSD_zm, tx_zm)
+function downvoting(aSD_zm, tx_zm)
   SDs = Float64[]
   atxDs = Float64[]
   downbb = Int64[]
@@ -47,6 +47,40 @@ function downsymboling(aSD_zm, tx_zm)
   end
   downbb, downtxbb
 end
+
+function downsymboling(bbupsym, sps)
+  SDs = Float64[]
+  atxDs = Float64[]
+  downbb = Int64[]
+  downtxbb = Int64[]
+
+  for h = 1:length(aSD_zm)
+    push!(SDs, aSD_zm[h])
+    push!(atxDs, tx_zm[h])
+    if(h%12==0)
+      temp1 = sign.(aSD_zm[h:-1:(h-12+1)])
+      n=count(>=(0.0), temp1)
+      if (n >= 6)
+        bit = 1
+      else 
+        bit = -1
+      end
+      push!(downbb,bit)
+      temp1 = sign.(tx_zm[h:-1:(h-12+1)])
+      n=count(>=(0.0), temp1)
+      #println(n)
+      if (n >= 6)
+        bit = 1
+      else 
+        bit = -1
+      end
+      push!(downtxbb,bit)
+    end
+    
+  end
+  downbb, downtxbb
+end
+
 
 
 function compDoppler(vn1, yb)
@@ -89,21 +123,27 @@ wavsize(filename) = wavread(filename; format="size")
 
 function find_mseq(bb, tx, th, blk)
   λ = 0.9999          # exponential averaging factor for threshold
-  β = 5.0             # threshold is β × average
+  β = 5             # threshold is β × average
   xmin = th       # minimum threshold
-  gap = 3500         # minimum gap between detections
-  pwidth = 25        # peak width (to look for maxima)
+  gap = 2000         # minimum gap between detections
+  pwidth = convert(Int64,round(blk/2))        # peak width (to look for maxima)
   x = abs.(mfilter(tx[1:blk], bb))
   μ = x[1]
   j = 0
   events = Int[]
   fs = 6000
+  μs = Float64[]
   for i = 1:length(x)
     μ = λ * μ + (1 - λ) * x[i]
-    if x[i] ≥ max(xmin, β * μ) && i ≥ j
-      push!(events, argmax(x[i:min(length(x),i+pwidth)]) + i - 1)
+    if x[i] ≥ xmin
+      println(i)
+      if x[i] ≥ xmin
+      
+      max(xmin, β * μ) && i ≥ j
+      push!(events, argmax(x[max(pwidth,i-pwidth):min(length(x),i+pwidth)]) + i - 1)
       j = i + gap
     end
+    push!(μs,μ)
   end
   #plot(x)
   println(events)
@@ -132,7 +172,7 @@ function dSample_comp_err(SD_all, yb)
   tx_zm = atx .- tx_m
   aSD_zm = aSD .- tx_m
   #println(length(aSD_zm))
-  downbb, downtxbb = downsymboling(aSD_zm, tx_zm)
+  downbb, downtxbb = downvoting(aSD_zm, tx_zm)
   uber = computeBER(downbb, downtxbb)
   OSNR=10*log10(1/(sum((abs.((yb[1:length(SD_all)] .- (-SD_all) ))).^2)/length(SD_all)))
   uber, downbb, downtxbb, OSNR

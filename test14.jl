@@ -26,7 +26,7 @@ wavsize(filename) = wavread(filename; format="size")
 
 y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
 yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
-filename = "loc5-2.wav" 
+filename = "loc5-1.wav" 
 nsamples, _ = wavsize(filename)
 x = signal(filename; start = 1, nsamples = nsamples)
 bbc , bb2 = prepsig(x[:,2])

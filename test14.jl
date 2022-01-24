@@ -31,9 +31,11 @@ nsamples, _ = wavsize(filename)
 x = signal(filename; start = 1, nsamples = nsamples)
 bbc , bb2 = prepsig(x[:,2])
 
- events = Int[]
- events = find_mseq(bbc, (yb), 0.7, 2000) #0.7, 3000 for 4-2 #0.5, 3000 for 5-1 # 0.7, 2000 for 5-2 # 0.7,2000
- e_all = Float64[]
+ #events = Int[]
+ #events = find_mseq(bb2, (yb), 0.12, 5000) #0.7, 3000 for 4-2 #0.5, 3000 for 5-1 # 0.7, 2000 for 5-2 # 0.7,2000
+ #e_all = Float64[]
+
+events = [119417, 247465, 371316, 490000, 563463, 718312, 845395, 966890]#events 5-1
 
  cber1s = Float64[]
  cber2s = Float64[] 

@@ -81,8 +81,6 @@ function downsymboling(bbupsym, sps)
   downbb, downtxbb
 end
 
-
-
 function compDoppler(vn1, yb)
     a = Float64[]
     for j = 1:1:100
@@ -98,13 +96,11 @@ end
 
 function prepsig(x)
     d1 = sfiltfilt(bpf, x)
-    bb=downconvert(sresample(d1, 9//8), 6, 6000)
-    bbc = bb .* cw(1000.0, length(bb)/6000, 6000.0)
+    bb=downconvert(sresample(d1, 9//8), 6, 5000)
 
     d1 = sfiltfilt(bpf1, x)
-    bb=downconvert(sresample(d1, 9//8), 6, 6000)
-    bbc2 = bb .* cw(1000.0, length(bb)/6000, 6000.0)
-    bbc, bbc2
+    bb2=downconvert(sresample(d1, 9//8), 6, 6000)
+    bb, bb2
 end
 
 
@@ -123,7 +119,7 @@ wavsize(filename) = wavread(filename; format="size")
 
 function find_mseq(bb, tx, th, blk)
   λ = 0.9999          # exponential averaging factor for threshold
-  β = 5             # threshold is β × average
+  β = 3.5             # threshold is β × average
   xmin = th       # minimum threshold
   gap = 2000         # minimum gap between detections
   pwidth = convert(Int64,round(blk/2))        # peak width (to look for maxima)
@@ -134,12 +130,8 @@ function find_mseq(bb, tx, th, blk)
   fs = 6000
   μs = Float64[]
   for i = 1:length(x)
-    μ = λ * μ + (1 - λ) * x[i]
-    if x[i] ≥ xmin
-      println(i)
-      if x[i] ≥ xmin
-      
-      max(xmin, β * μ) && i ≥ j
+    μ = λ * μ + (1 - λ) * x[i]  
+    if (x[i] > max(xmin, β * μ) && i ≥ j)
       push!(events, argmax(x[max(pwidth,i-pwidth):min(length(x),i+pwidth)]) + i - 1)
       j = i + gap
     end

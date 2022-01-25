@@ -117,6 +117,28 @@ end
 
 wavsize(filename) = wavread(filename; format="size")
 
+function get_start(crs, tx)
+  ave = moving_average(crs,1000)
+  for i = 1:length(crs)
+
+  end
+
+end
+
+function firstpeak(x)
+  #println(length(x))
+  length(x) == 0 && return nothing
+  θ = max(maximum(x)/10, 1.5*median(x))
+  p = findfirst(x .≥ θ)
+  #println(p)
+  while p !== nothing && p < length(x) && x[p+1] > x[p]
+   p += 1
+   #println(p)
+  end
+  p
+end
+
+
 function find_mseq(bb, tx, th, blk)
   λ = 0.9999          # exponential averaging factor for threshold
   β = 3.5             # threshold is β × average
@@ -197,7 +219,7 @@ end
 
 
 
-function process3(x, events, d, Q)
+function process3(x, events, Q)
   y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
   yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
   T = length(yb)
@@ -220,9 +242,9 @@ function process3(x, events, d, Q)
 
   println((snr1,snr2,snr3))
 
-  vn1 = makevb(rbb1, d)
-  vn2 = makevb(rbb2, d)
-  vn3 = makevb(rbb3, d) 
+  vn1 = makevb(rbb1)
+  vn2 = makevb(rbb2)
+  vn3 = makevb(rbb3) 
   
   blksize = 1092
   eqlzBlkSize = (12 * 64)

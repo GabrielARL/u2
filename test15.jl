@@ -1,10 +1,12 @@
-dict1=load("loc4.jld2")
+using JLD2
+using Plots
+dict1=load("loc6.jld2")
 
-uber1=dict1["uber"]
-cber1=dict1["cber"]
+uber1=dict1["cber1s"]
+cber1=dict1["cber2s"]
 
-uber_com = dict1["uber_com"]
-cber_com = dict1["cber_com"]
+uber_com = dict1["cber3s"]
+cber_com = dict1["cber4s"]
 
 plot(uber1)
 plot!(cber1)

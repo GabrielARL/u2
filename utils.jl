@@ -6,7 +6,7 @@ using DSP
 const audacityExe = "/Applications/Audacity.app/Contents/MacOS/Audacity"
 fs = 32000
 bpf = fir(256, 3800.0, 6200.0; fs=fs)
-bpf1 = fir(256, 4500.0, 5500.0; fs=fs)
+bpf1 = fir(256, 4900.0, 5100.0; fs=fs)
 
 function computeBER(downbb, downtxbb)
   bits = Int64[]
@@ -15,11 +15,12 @@ function computeBER(downbb, downtxbb)
   ber2
 end
 
-function downvoting(aSD_zm, tx_zm)
+function downsymboling(aSD_zm, tx_zm)
   SDs = Float64[]
   atxDs = Float64[]
   downbb = Int64[]
   downtxbb = Int64[]
+
 
   for h = 1:length(aSD_zm)
     push!(SDs, aSD_zm[h])
@@ -45,41 +46,11 @@ function downvoting(aSD_zm, tx_zm)
     end
     
   end
+
   downbb, downtxbb
+
 end
 
-function downsymboling(bbupsym, sps)
-  SDs = Float64[]
-  atxDs = Float64[]
-  downbb = Int64[]
-  downtxbb = Int64[]
-
-  for h = 1:length(aSD_zm)
-    push!(SDs, aSD_zm[h])
-    push!(atxDs, tx_zm[h])
-    if(h%12==0)
-      temp1 = sign.(aSD_zm[h:-1:(h-12+1)])
-      n=count(>=(0.0), temp1)
-      if (n >= 6)
-        bit = 1
-      else 
-        bit = -1
-      end
-      push!(downbb,bit)
-      temp1 = sign.(tx_zm[h:-1:(h-12+1)])
-      n=count(>=(0.0), temp1)
-      #println(n)
-      if (n >= 6)
-        bit = 1
-      else 
-        bit = -1
-      end
-      push!(downtxbb,bit)
-    end
-    
-  end
-  downbb, downtxbb
-end
 
 function compDoppler(vn1, yb)
     a = Float64[]
@@ -97,10 +68,12 @@ end
 function prepsig(x)
     d1 = sfiltfilt(bpf, x)
     bb=downconvert(sresample(d1, 9//8), 6, 5000)
+    bbc = bb #.* cw(1000.0, length(bb)/6000, 6000.0)
 
     d1 = sfiltfilt(bpf1, x)
-    bb2=downconvert(sresample(d1, 9//8), 6, 6000)
-    bb, bb2
+    bb=downconvert(sresample(d1, 9//8), 6, 5000)
+    bbc2 = bb #.* cw(1000.0, length(bb)/6000, 6000.0)
+    bbc, bbc2
 end
 
 
@@ -117,47 +90,23 @@ end
 
 wavsize(filename) = wavread(filename; format="size")
 
-function get_start(crs, tx)
-  ave = moving_average(crs,1000)
-  for i = 1:length(crs)
-
-  end
-
-end
-
-function firstpeak(x)
-  #println(length(x))
-  length(x) == 0 && return nothing
-  θ = max(maximum(x)/10, 1.5*median(x))
-  p = findfirst(x .≥ θ)
-  #println(p)
-  while p !== nothing && p < length(x) && x[p+1] > x[p]
-   p += 1
-   #println(p)
-  end
-  p
-end
-
-
 function find_mseq(bb, tx, th, blk)
   λ = 0.9999          # exponential averaging factor for threshold
-  β = 3.5             # threshold is β × average
+  β = 5             # threshold is β × average
   xmin = th       # minimum threshold
-  gap = 2000         # minimum gap between detections
-  pwidth = convert(Int64,round(blk/2))        # peak width (to look for maxima)
+  gap = 3500         # minimum gap between detections
+  pwidth = 25        # peak width (to look for maxima)
   x = abs.(mfilter(tx[1:blk], bb))
   μ = x[1]
   j = 0
   events = Int[]
   fs = 6000
-  μs = Float64[]
   for i = 1:length(x)
-    μ = λ * μ + (1 - λ) * x[i]  
-    if (x[i] > max(xmin, β * μ) && i ≥ j)
-      push!(events, argmax(x[max(pwidth,i-pwidth):min(length(x),i+pwidth)]) + i - 1)
+    μ = λ * μ + (1 - λ) * x[i]
+    if x[i] ≥ max(xmin, β * μ) && i ≥ j
+      push!(events, argmax(x[i:min(length(x),i+pwidth)]) + i - 1)
       j = i + gap
     end
-    push!(μs,μ)
   end
   #plot(x)
   println(events)
@@ -179,6 +128,42 @@ function find_mseq(bb, tx, th, blk)
   events
 end 
 
+function compDoppler_equalize(vn1, blksize, eqlzBlkSize, yb, Q, λ)
+  vn_best_all = ComplexF64[]
+  SD_all = ComplexF64[]
+
+  for i = 1:blksize:length(vn1)-blksize-1
+    vn_best = compDoppler(vn1[i:i+blksize-1], yb[i:i+blksize-1])
+    if(length(vn_best) > blksize)
+        vn_best = vn_best[1:blksize]
+    end
+    if(length(vn_best) < blksize)
+        vn_best = [vn_best; zeros(ComplexF64,blksize-length(vn_best))]
+    end
+
+    for h = 1:length(vn_best)
+        push!(vn_best_all, vn_best[h])
+    end
+  end  
+
+
+  for i = 1:eqlzBlkSize:length(vn_best_all)-eqlzBlkSize-1
+      quantizer_op, error, ff_filt, SD, ffops, ff = chRlsTrain(vn_best_all[i:i+eqlzBlkSize], yb[i:i+eqlzBlkSize], Q*12, λ, 1)
+      Ber1 = computeBER(quantizer_op, yb[i:i+eqlzBlkSize])
+      quantizer_op, SD2 = DA(vn_best_all[i:i+eqlzBlkSize], ff_filt, 1)
+      #println((length(SD2), eqlzBlkSize))
+      for h = 1:(eqlzBlkSize)
+          if(h <= length(SD2))
+            push!(SD_all, SD2[h])
+          else
+            push!(SD_all, zero(ComplexF64))
+          end
+      end
+      #println(length(SD_all))
+  end
+SD_all
+end
+
 function dSample_comp_err(SD_all, yb)
   atx=angle.(samples(yb))
   tx_m = mean(atx)
@@ -186,7 +171,7 @@ function dSample_comp_err(SD_all, yb)
   tx_zm = atx .- tx_m
   aSD_zm = aSD .- tx_m
   #println(length(aSD_zm))
-  downbb, downtxbb = downvoting(aSD_zm, tx_zm)
+  downbb, downtxbb = downsymboling(aSD_zm, tx_zm)
   uber = computeBER(downbb, downtxbb)
   OSNR=10*log10(1/(sum((abs.((yb[1:length(SD_all)] .- (-SD_all) ))).^2)/length(SD_all)))
   uber, downbb, downtxbb, OSNR
@@ -217,11 +202,30 @@ function perform_post_decoding(data, downbb,downtxbb)
   dataR
 end
 
+function get_snr(events, bb1, bb2, bb3, T)
+  #y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
+  #yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
+  rbb1 = bb1[events:events+T]
+  rbb2 = bb2[events:events+T]
+  rbb3 = bb3[events:events+T]
 
+  nbb1 = bb1[events+T:min(events+(2*T),length(bb1)-1)]  
+  nbb2 = bb2[events+T:min(events+(2*T),length(bb1)-1)]
+  nbb3 = bb3[events+T:min(events+(2*T),length(bb1)-1)]
 
-function process3(x, events, Q)
-  y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
-  yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
+  snr1 = norm(rbb1,2) / ( norm(nbb1, 2))
+  snr2 = norm(rbb2,2) / ( norm(nbb2, 2))
+  snr3 = norm(rbb3,2) / ( norm(nbb3, 2))
+  
+  snr1,snr2,snr3
+end
+
+function process3(x, events, d, Q)
+  #y = signal(repeat(mseq(12); inner=12) .* cw(-1000.0, length(mseq(12))*12/6000, 6000.0), 6000.0)
+  #yb = y .* cw(1000.0, length(mseq(12))*12/6000, 6000.0)
+
+  yb = signal(repeat(mseq(12); inner=12), 6000)
+
   T = length(yb)
 
   bb1, _ = prepsig(x[:,1])
@@ -242,9 +246,9 @@ function process3(x, events, Q)
 
   println((snr1,snr2,snr3))
 
-  vn1 = makevb(rbb1)
-  vn2 = makevb(rbb2)
-  vn3 = makevb(rbb3) 
+  vn1 = makevb(rbb1, d)
+  vn2 = makevb(rbb2, d)
+  vn3 = makevb(rbb3, d) 
   
   blksize = 1092
   eqlzBlkSize = (12 * 64)
